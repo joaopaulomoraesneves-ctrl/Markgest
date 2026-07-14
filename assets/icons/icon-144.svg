@@ -1,0 +1,12 @@
+<!-- icon-144.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144" width="144" height="144">
+  <defs>
+    <linearGradient id="bg144" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8B0000"/>
+      <stop offset="100%" stop-color="#1A1A1A"/>
+    </linearGradient>
+  </defs>
+  <rect width="144" height="144" rx="24" fill="url(#bg144)"/>
+  <text x="72" y="82" text-anchor="middle" font-size="60">🍔</text>
+  <text x="72" y="120" text-anchor="middle" font-size="14" font-family="Arial,sans-serif" font-weight="bold" fill="#D4AF37" letter-spacing="1">FESTAGEST</text>
+</svg>
