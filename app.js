@@ -1,45 +1,24 @@
 /* ============================================================
-   FESTAGEST PRO - Aplicação Principal (v1.1)
-   Correções: produção possível com conversão de unidades,
-   valor total de vendas possíveis, e ajustes de exibição.
+   FESTAGEST PRO - Aplicação Principal (v1.2)
+   Correção definitiva na conversão de unidades e produção.
    ============================================================ */
 
-// ===================== CONFIGURAÇÕES PADRÃO =====================
 const DEFAULT_CONFIG = {
-    empresa: 'Minha Barraca',
-    logo: '🍔',
-    tema: 'light',
-    moeda: 'BRL',
-    idioma: 'pt-BR',
-    markupPadrao: 2.5,
-    impostos: 0,
-    arredondamento: '0.90'
+    empresa: 'Minha Barraca', logo: '🍔', tema: 'light', moeda: 'BRL',
+    idioma: 'pt-BR', markupPadrao: 2.5, impostos: 0, arredondamento: '0.90'
 };
 
-// ===================== DADOS INICIAIS =====================
 const INITIAL_DATA = {
-    config: { ...DEFAULT_CONFIG },
-    ingredientes: [],
-    receitas: [],
-    vendas: [],
-    compras: [],
-    caixa: {
-        abertura: 0,
-        entradas: [],
-        saidas: [],
-        saldoAtual: 0,
-        fechado: false
-    },
+    config: { ...DEFAULT_CONFIG }, ingredientes: [], receitas: [], vendas: [],
+    compras: [], caixa: { abertura:0, entradas:[], saidas:[], saldoAtual:0, fechado:false },
     estoqueMovimentacoes: []
 };
 
-// ===================== GERENCIADOR DE ESTADO =====================
 class StateManager {
     constructor() {
         this.data = this.loadData();
         this.listeners = [];
     }
-
     loadData() {
         try {
             const saved = localStorage.getItem('festagest_data');
@@ -48,51 +27,15 @@ class StateManager {
                 parsed.config = { ...DEFAULT_CONFIG, ...parsed.config };
                 return parsed;
             }
-        } catch (e) {
-            console.error('Erro ao carregar dados:', e);
-        }
+        } catch (e) {}
         return JSON.parse(JSON.stringify(INITIAL_DATA));
     }
-
     saveData() {
-        try {
-            localStorage.setItem('festagest_data', JSON.stringify(this.data));
-            this.notifyListeners();
-        } catch (e) {
-            console.error('Erro ao salvar dados:', e);
-        }
+        localStorage.setItem('festagest_data', JSON.stringify(this.data));
+        this.notifyListeners();
     }
-
     getData() { return this.data; }
-
-    updateConfig(key, value) {
-        this.data.config[key] = value;
-        this.saveData();
-    }
-
-    // ---------- INGREDIENTES ----------
-    addIngrediente(ingrediente) {
-        ingrediente.id = Date.now().toString();
-        ingrediente.createdAt = new Date().toISOString();
-        this._calcularPrecosUnitarios(ingrediente);
-        this.data.ingredientes.push(ingrediente);
-        this.saveData();
-        return ingrediente;
-    }
-
-    updateIngrediente(id, dados) {
-        const index = this.data.ingredientes.findIndex(i => i.id === id);
-        if (index !== -1) {
-            this.data.ingredientes[index] = { ...this.data.ingredientes[index], ...dados };
-            this._calcularPrecosUnitarios(this.data.ingredientes[index]);
-            this.saveData();
-        }
-    }
-
-    deleteIngrediente(id) {
-        this.data.ingredientes = this.data.ingredientes.filter(i => i.id !== id);
-        this.saveData();
-    }
+    updateConfig(k, v) { this.data.config[k] = v; this.saveData(); }
 
     _calcularPrecosUnitarios(ing) {
         const qtd = parseFloat(ing.quantidadeComprada) || 1;
@@ -100,18 +43,17 @@ class StateManager {
         const perda = parseFloat(ing.perda) || 0;
         const qtdEfetiva = qtd * (1 - perda / 100);
         ing.precoPorUnidade = qtdEfetiva > 0 ? preco / qtdEfetiva : 0;
-
-        const unidade = (ing.unidade || '').toLowerCase();
-        if (unidade === 'kg' || unidade === 'kilo') {
+        const u = (ing.unidade || '').toLowerCase();
+        if (u === 'kg' || u === 'kilo') {
             ing.precoPorGrama = ing.precoPorUnidade / 1000;
             ing.precoPorKg = ing.precoPorUnidade;
-        } else if (unidade === 'g' || unidade === 'grama') {
+        } else if (u === 'g' || u === 'grama') {
             ing.precoPorGrama = ing.precoPorUnidade;
             ing.precoPorKg = ing.precoPorUnidade * 1000;
-        } else if (unidade === 'l' || unidade === 'litro') {
+        } else if (u === 'l' || u === 'litro') {
             ing.precoPorMl = ing.precoPorUnidade / 1000;
             ing.precoPorLitro = ing.precoPorUnidade;
-        } else if (unidade === 'ml') {
+        } else if (u === 'ml') {
             ing.precoPorMl = ing.precoPorUnidade;
             ing.precoPorLitro = ing.precoPorUnidade * 1000;
         } else {
@@ -119,99 +61,97 @@ class StateManager {
         }
     }
 
-    // ---------- RECEITAS ----------
-    addReceita(receita) {
-        receita.id = Date.now().toString();
-        receita.createdAt = new Date().toISOString();
-        receita.ingredientes = receita.ingredientes || [];
-        this._calcularCustosReceita(receita);
-        this.data.receitas.push(receita);
+    addIngrediente(ing) {
+        ing.id = Date.now().toString();
+        ing.createdAt = new Date().toISOString();
+        this._calcularPrecosUnitarios(ing);
+        this.data.ingredientes.push(ing);
         this.saveData();
-        return receita;
+        return ing;
     }
-
-    updateReceita(id, dados) {
-        const index = this.data.receitas.findIndex(r => r.id === id);
-        if (index !== -1) {
-            this.data.receitas[index] = { ...this.data.receitas[index], ...dados };
-            this._calcularCustosReceita(this.data.receitas[index]);
+    updateIngrediente(id, dados) {
+        const idx = this.data.ingredientes.findIndex(i => i.id === id);
+        if (idx !== -1) {
+            this.data.ingredientes[idx] = { ...this.data.ingredientes[idx], ...dados };
+            this._calcularPrecosUnitarios(this.data.ingredientes[idx]);
             this.saveData();
         }
     }
-
-    deleteReceita(id) {
-        this.data.receitas = this.data.receitas.filter(r => r.id !== id);
+    deleteIngrediente(id) {
+        this.data.ingredientes = this.data.ingredientes.filter(i => i.id !== id);
         this.saveData();
     }
 
     _calcularCustosReceita(receita) {
-        let custoTotal = 0;
+        let custo = 0;
         if (receita.ingredientes) {
-            receita.ingredientes.forEach(ingReceita => {
-                const ingCadastrado = this.data.ingredientes.find(i => i.id === ingReceita.ingredienteId);
-                if (ingCadastrado) {
-                    const qtd = parseFloat(ingReceita.quantidade) || 0;
-                    const un = (ingReceita.unidadeUsada || '').toLowerCase();
-                    let custo = 0;
-                    if (un === 'g' || un === 'grama') custo = (ingCadastrado.precoPorGrama || 0) * qtd;
-                    else if (un === 'kg') custo = (ingCadastrado.precoPorKg || 0) * qtd;
-                    else if (un === 'ml') custo = (ingCadastrado.precoPorMl || 0) * qtd;
-                    else if (un === 'l' || un === 'litro') custo = (ingCadastrado.precoPorLitro || 0) * qtd;
-                    else custo = (ingCadastrado.precoPorUnidade || 0) * qtd;
-                    ingReceita.custo = custo;
-                    ingReceita.nome = ingCadastrado.nome;
-                    custoTotal += custo;
+            receita.ingredientes.forEach(ingR => {
+                const ing = this.data.ingredientes.find(i => i.id === ingR.ingredienteId);
+                if (ing) {
+                    const qtd = parseFloat(ingR.quantidade) || 0;
+                    const un = (ingR.unidadeUsada || '').toLowerCase();
+                    let c = 0;
+                    if (un === 'g' || un === 'grama') c = (ing.precoPorGrama || 0) * qtd;
+                    else if (un === 'kg') c = (ing.precoPorKg || 0) * qtd;
+                    else if (un === 'ml') c = (ing.precoPorMl || 0) * qtd;
+                    else if (un === 'l' || un === 'litro') c = (ing.precoPorLitro || 0) * qtd;
+                    else c = (ing.precoPorUnidade || 0) * qtd;
+                    ingR.custo = c; ingR.nome = ing.nome; custo += c;
                 }
             });
         }
-        receita.custoTotal = custoTotal;
-
+        receita.custoTotal = custo;
         const precoManual = parseFloat(receita.precoManual);
         if (precoManual > 0) {
             receita.precoArredondado = precoManual;
             receita.precoSugerido = precoManual;
-            receita.margem = precoManual - custoTotal;
+            receita.margem = precoManual - custo;
         } else {
-            const markup = parseFloat(receita.markup) || parseFloat(this.data.config.markupPadrao) || 2.5;
-            receita.precoSugerido = custoTotal * markup;
+            const mk = parseFloat(receita.markup) || parseFloat(this.data.config.markupPadrao) || 2.5;
+            receita.precoSugerido = custo * mk;
             receita.precoArredondado = this._arredondarPreco(receita.precoSugerido);
-            receita.margem = receita.precoArredondado - custoTotal;
+            receita.margem = receita.precoArredondado - custo;
         }
         receita.lucro = receita.margem;
         receita.margemPercentual = receita.precoArredondado > 0 ? (receita.margem / receita.precoArredondado) * 100 : 0;
     }
 
-    _arredondarPreco(preco) {
-        if (preco <= 0) return 0;
-        const inteiro = Math.floor(preco);
-        const decimal = preco - inteiro;
-        return inteiro + 0.90;
-    }
+    _arredondarPreco(p) { return p <= 0 ? 0 : Math.floor(p) + 0.90; }
 
-    // ---------- VENDAS ----------
+    addReceita(r) {
+        r.id = Date.now().toString();
+        r.createdAt = new Date().toISOString();
+        r.ingredientes = r.ingredientes || [];
+        this._calcularCustosReceita(r);
+        this.data.receitas.push(r);
+        this.saveData();
+        return r;
+    }
+    updateReceita(id, dados) {
+        const idx = this.data.receitas.findIndex(r => r.id === id);
+        if (idx !== -1) {
+            this.data.receitas[idx] = { ...this.data.receitas[idx], ...dados };
+            this._calcularCustosReceita(this.data.receitas[idx]);
+            this.saveData();
+        }
+    }
+    deleteReceita(id) { this.data.receitas = this.data.receitas.filter(r => r.id !== id); this.saveData(); }
+
     registrarVenda(venda) {
         venda.id = Date.now().toString();
         venda.data = new Date().toISOString();
         this.data.vendas.push(venda);
-        this.data.caixa.entradas.push({
-            id: venda.id, tipo: 'venda', valor: parseFloat(venda.valor) || 0,
-            formaPagamento: venda.formaPagamento,
-            descricao: 'Venda: ' + (venda.produtoNome || 'Produto'), data: venda.data
-        });
-        this.data.caixa.saldoAtual += parseFloat(venda.valor) || 0;
+        this.data.caixa.entradas.push({ id:venda.id, tipo:'venda', valor:parseFloat(venda.valor)||0, formaPagamento:venda.formaPagamento, descricao:'Venda: '+(venda.produtoNome||'Produto'), data:venda.data });
+        this.data.caixa.saldoAtual += parseFloat(venda.valor)||0;
         if (venda.receitaId) {
-            const receita = this.data.receitas.find(r => r.id === venda.receitaId);
-            if (receita?.ingredientes) {
-                receita.ingredientes.forEach(ing => {
+            const rec = this.data.receitas.find(r => r.id === venda.receitaId);
+            if (rec?.ingredientes) {
+                rec.ingredientes.forEach(ingR => {
                     this.data.estoqueMovimentacoes.push({
-                        id: Date.now().toString() + Math.random(),
-                        ingredienteId: ing.ingredienteId,
-                        tipo: 'saida',
-                        quantidade: parseFloat(ing.quantidade) || 0,
-                        unidade: ing.unidadeUsada || 'un',
-                        motivo: 'Venda: ' + venda.id,
-                        data: venda.data,
-                        receitaId: venda.receitaId
+                        id: Date.now().toString()+Math.random(), ingredienteId: ingR.ingredienteId,
+                        tipo:'saida', quantidade: parseFloat(ingR.quantidade)||0,
+                        unidade: ingR.unidadeUsada||'un', motivo:'Venda: '+venda.id,
+                        data: venda.data, receitaId: venda.receitaId
                     });
                 });
             }
@@ -220,126 +160,75 @@ class StateManager {
         return venda;
     }
 
-    // ---------- COMPRAS ----------
     addCompra(compra) {
         compra.id = Date.now().toString();
         compra.data = new Date().toISOString();
         this.data.compras.push(compra);
         this.data.estoqueMovimentacoes.push({
-            id: Date.now().toString() + Math.random(),
-            ingredienteId: compra.ingredienteId,
-            tipo: 'entrada',
-            quantidade: parseFloat(compra.quantidade) || 0,
-            unidade: compra.unidade || 'un',
-            motivo: 'Compra: ' + (compra.nota || compra.id),
-            data: compra.data,
-            valor: parseFloat(compra.valor) || 0,
-            fornecedor: compra.fornecedor || ''
+            id: Date.now().toString()+Math.random(), ingredienteId: compra.ingredienteId,
+            tipo:'entrada', quantidade: parseFloat(compra.quantidade)||0,
+            unidade: compra.unidade||'un', motivo:'Compra: '+(compra.nota||compra.id),
+            data: compra.data, valor: parseFloat(compra.valor)||0, fornecedor: compra.fornecedor||''
         });
         const ing = this.data.ingredientes.find(i => i.id === compra.ingredienteId);
         if (ing) {
-            const novaQtd = (parseFloat(ing.quantidadeComprada) || 0) + (parseFloat(compra.quantidade) || 0);
-            ing.precoPago = ((parseFloat(ing.precoPago) || 0) * (parseFloat(ing.quantidadeComprada) || 1) + (parseFloat(compra.valor) || 0)) / (novaQtd || 1);
+            const novaQtd = (parseFloat(ing.quantidadeComprada)||0) + (parseFloat(compra.quantidade)||0);
+            ing.precoPago = ((parseFloat(ing.precoPago)||0)*(parseFloat(ing.quantidadeComprada)||1)+(parseFloat(compra.valor)||0))/(novaQtd||1);
             ing.quantidadeComprada = novaQtd;
             this._calcularPrecosUnitarios(ing);
         }
-        this.data.caixa.saidas.push({
-            id: compra.id, tipo: 'compra', valor: parseFloat(compra.valor) || 0,
-            descricao: 'Compra: ' + (compra.nota || ''), data: compra.data
-        });
-        this.data.caixa.saldoAtual -= parseFloat(compra.valor) || 0;
+        this.data.caixa.saidas.push({ id:compra.id, tipo:'compra', valor:parseFloat(compra.valor)||0, descricao:'Compra: '+(compra.nota||''), data:compra.data });
+        this.data.caixa.saldoAtual -= parseFloat(compra.valor)||0;
         this.saveData();
         return compra;
     }
 
-    // ---------- CAIXA ----------
-    abrirCaixa(valor) {
-        this.data.caixa.abertura = parseFloat(valor) || 0;
-        this.data.caixa.saldoAtual = parseFloat(valor) || 0;
-        this.data.caixa.fechado = false;
-        this.data.caixa.entradas = [];
-        this.data.caixa.saidas = [];
-        this.saveData();
-    }
+    abrirCaixa(valor) { this.data.caixa.abertura=parseFloat(valor)||0; this.data.caixa.saldoAtual=parseFloat(valor)||0; this.data.caixa.fechado=false; this.data.caixa.entradas=[]; this.data.caixa.saidas=[]; this.saveData(); }
+    fecharCaixa() { this.data.caixa.fechado=true; this.saveData(); }
 
-    fecharCaixa() {
-        this.data.caixa.fechado = true;
-        this.saveData();
-    }
+    getVendasHoje() { const hoje=new Date().toISOString().split('T')[0]; return this.data.vendas.filter(v=>v.data.startsWith(hoje)); }
+    getFaturamentoHoje() { return this.getVendasHoje().reduce((s,v)=>s+(parseFloat(v.valor)||0),0); }
+    getLucroHoje() { return this.getVendasHoje().reduce((s,v)=>{ const r=this.data.receitas.find(rec=>rec.id===v.receitaId); return s+(r?parseFloat(r.margem)||0:0); },0); }
+    getQuantidadeVendidaHoje() { return this.getVendasHoje().length; }
 
-    // ---------- DASHBOARD ----------
-    getVendasHoje() {
-        const hoje = new Date().toISOString().split('T')[0];
-        return this.data.vendas.filter(v => v.data.startsWith(hoje));
-    }
-
-    getFaturamentoHoje() {
-        return this.getVendasHoje().reduce((s, v) => s + (parseFloat(v.valor) || 0), 0);
-    }
-
-    getLucroHoje() {
-        return this.getVendasHoje().reduce((s, v) => {
-            const r = this.data.receitas.find(rec => rec.id === v.receitaId);
-            return s + (r ? (parseFloat(r.margem) || 0) : 0);
-        }, 0);
-    }
-
-    getQuantidadeVendidaHoje() {
-        return this.getVendasHoje().length;
-    }
-
-    // ---------- ESTOQUE ----------
     _converterUnidade(quantidade, de, para) {
-        const unidadesMassa = ['kg', 'g', 'grama', 'gramas', 'kilo', 'quilo'];
-        const unidadesVolume = ['l', 'litro', 'ml', 'mililitro'];
-        const normalizar = (u) => {
-            u = u.toLowerCase();
-            if (unidadesMassa.includes(u)) return 'g';
-            if (unidadesVolume.includes(u)) return 'ml';
-            return u;
-        };
-        const baseDe = normalizar(de);
-        const basePara = normalizar(para);
-        if (baseDe === basePara) return quantidade;
-        if (baseDe === 'kg' && basePara === 'g') return quantidade * 1000;
-        if (baseDe === 'g' && basePara === 'kg') return quantidade / 1000;
-        if (baseDe === 'l' && basePara === 'ml') return quantidade * 1000;
-        if (baseDe === 'ml' && basePara === 'l') return quantidade / 1000;
-        return quantidade; // sem conversão se unidades diferentes
+        const paraGramas = { 'kg':1000, 'kilo':1000, 'quilo':1000, 'g':1, 'grama':1, 'gramas':1 };
+        const paraMl = { 'l':1000, 'litro':1000, 'ml':1, 'mililitro':1 };
+        const deL = (de||'').toLowerCase(), paraL = (para||'').toLowerCase();
+        if (paraGramas.hasOwnProperty(deL) && paraGramas.hasOwnProperty(paraL)) {
+            const emGramas = quantidade * paraGramas[deL];
+            return emGramas / paraGramas[paraL];
+        }
+        if (paraMl.hasOwnProperty(deL) && paraMl.hasOwnProperty(paraL)) {
+            const emMl = quantidade * paraMl[deL];
+            return emMl / paraMl[paraL];
+        }
+        return quantidade;
     }
 
     getEstoqueAtual(ingredienteId) {
         const ing = this.data.ingredientes.find(i => i.id === ingredienteId);
         if (!ing) return 0;
-        const unidadeIng = ing.unidade || 'un';
-        // Soma inicial
+        const unIng = ing.unidade || 'un';
         let total = parseFloat(ing.quantidadeComprada) || 0;
-        // Adiciona entradas convertendo para unidade do ingrediente
         this.data.estoqueMovimentacoes.filter(m => m.ingredienteId === ingredienteId && m.tipo === 'entrada').forEach(m => {
-            const qtd = parseFloat(m.quantidade) || 0;
-            total += this._converterUnidade(qtd, m.unidade || unidadeIng, unidadeIng);
+            total += this._converterUnidade(parseFloat(m.quantidade)||0, m.unidade||unIng, unIng);
         });
-        // Subtrai saídas convertendo
         this.data.estoqueMovimentacoes.filter(m => m.ingredienteId === ingredienteId && m.tipo === 'saida').forEach(m => {
-            const qtd = parseFloat(m.quantidade) || 0;
-            total -= this._converterUnidade(qtd, m.unidade || unidadeIng, unidadeIng);
+            total -= this._converterUnidade(parseFloat(m.quantidade)||0, m.unidade||unIng, unIng);
         });
         return Math.max(0, total);
     }
 
     getProducaoPossivel(receitaId) {
-        const receita = this.data.receitas.find(r => r.id === receitaId);
-        if (!receita?.ingredientes?.length) return Infinity;
+        const rec = this.data.receitas.find(r => r.id === receitaId);
+        if (!rec?.ingredientes?.length) return Infinity;
         let min = Infinity;
-        receita.ingredientes.forEach(ingReceita => {
-            const ing = this.data.ingredientes.find(i => i.id === ingReceita.ingredienteId);
+        rec.ingredientes.forEach(ingR => {
+            const ing = this.data.ingredientes.find(i => i.id === ingR.ingredienteId);
             if (!ing) return;
             const estoque = this.getEstoqueAtual(ing.id);
-            const qtdNecessaria = this._converterUnidade(
-                parseFloat(ingReceita.quantidade) || 0,
-                ingReceita.unidadeUsada || 'un',
-                ing.unidade || 'un'
-            );
+            const qtdNecessaria = this._converterUnidade(parseFloat(ingR.quantidade)||0, ingR.unidadeUsada||'un', ing.unidade||'un');
             if (qtdNecessaria > 0) {
                 const possivel = Math.floor(estoque / qtdNecessaria);
                 if (possivel < min) min = possivel;
@@ -352,52 +241,36 @@ class StateManager {
         let total = 0;
         this.data.receitas.forEach(r => {
             const qtd = this.getProducaoPossivel(r.id);
-            if (qtd > 0 && qtd !== Infinity) {
-                total += qtd * (parseFloat(r.precoArredondado) || 0);
-            }
+            if (qtd > 0 && qtd !== Infinity) total += qtd * (parseFloat(r.precoArredondado)||0);
         });
         return total;
     }
 
-    // ---------- RELATÓRIOS ----------
     getRelatorio(periodo) {
-        const agora = new Date();
-        let inicio;
+        const agora = new Date(); let inicio;
         switch (periodo) {
-            case 'hoje': inicio = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate()); break;
-            case 'semana': inicio = new Date(agora); inicio.setDate(agora.getDate() - 7); break;
-            case 'mes': inicio = new Date(agora.getFullYear(), agora.getMonth(), 1); break;
-            case 'ano': inicio = new Date(agora.getFullYear(), 0, 1); break;
-            default: inicio = new Date(0);
+            case 'hoje': inicio=new Date(agora.getFullYear(),agora.getMonth(),agora.getDate()); break;
+            case 'semana': inicio=new Date(agora); inicio.setDate(agora.getDate()-7); break;
+            case 'mes': inicio=new Date(agora.getFullYear(),agora.getMonth(),1); break;
+            case 'ano': inicio=new Date(agora.getFullYear(),0,1); break;
+            default: inicio=new Date(0);
         }
-        const vendas = this.data.vendas.filter(v => v.data >= inicio.toISOString());
-        const fat = vendas.reduce((s, v) => s + (parseFloat(v.valor) || 0), 0);
-        const lucro = vendas.reduce((s, v) => {
-            const r = this.data.receitas.find(rec => rec.id === v.receitaId);
-            return s + (r ? (parseFloat(r.margem) || 0) : 0);
-        }, 0);
-        return {
-            periodo, quantidadeVendas: vendas.length, faturamento: fat, lucro,
-            cmv: fat - lucro,
-            margemPercentual: fat > 0 ? (lucro / fat) * 100 : 0,
-            vendas
-        };
+        const vendas = this.data.vendas.filter(v=>v.data>=inicio.toISOString());
+        const fat = vendas.reduce((s,v)=>s+(parseFloat(v.valor)||0),0);
+        const lucro = vendas.reduce((s,v)=>{ const r=this.data.receitas.find(rec=>rec.id===v.receitaId); return s+(r?parseFloat(r.margem)||0:0); },0);
+        return { periodo, quantidadeVendas:vendas.length, faturamento:fat, lucro, cmv:fat-lucro, margemPercentual:fat>0?(lucro/fat)*100:0, vendas };
     }
 
-    // ---------- BACKUP ----------
     exportarDados() { return JSON.stringify(this.data, null, 2); }
-
     importarDados(json) {
         try {
             const dados = JSON.parse(json);
             if (dados.config && dados.ingredientes && dados.receitas) {
-                this.data = dados;
-                this.data.config = { ...DEFAULT_CONFIG, ...this.data.config };
-                this.saveData();
-                return true;
+                this.data = dados; this.data.config = {...DEFAULT_CONFIG, ...this.data.config};
+                this.saveData(); return true;
             }
-            return false;
-        } catch (e) { return false; }
+        } catch(e) {}
+        return false;
     }
 
     addListener(fn) { this.listeners.push(fn); }
@@ -436,9 +309,7 @@ class UIController {
         document.getElementById('menuToggle').addEventListener('click', () => this.toggleSidebar());
         document.getElementById('themeToggle').addEventListener('click', () => this.toggleTheme());
         document.getElementById('fabButton').addEventListener('click', () => this.handleFab());
-        document.getElementById('modalOverlay').addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) this.closeModal();
-        });
+        document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) this.closeModal(); });
     }
 
     navigateTo(page) {
@@ -452,8 +323,8 @@ class UIController {
     }
 
     getTitle(p) {
-        const titles = { dashboard:'Dashboard', vendas:'Modo Festa 🎉', estoque:'Estoque', receitas:'Receitas', ingredientes:'Ingredientes', compras:'Compras', caixa:'Caixa', relatorios:'Relatórios', configuracoes:'Configurações', backup:'Backup', markup:'Calculadora Markup' };
-        return titles[p] || p;
+        const t = { dashboard:'Dashboard', vendas:'Modo Festa 🎉', estoque:'Estoque', receitas:'Receitas', ingredientes:'Ingredientes', compras:'Compras', caixa:'Caixa', relatorios:'Relatórios', configuracoes:'Configurações', backup:'Backup', markup:'Calculadora Markup' };
+        return t[p] || p;
     }
 
     updateActiveNav(page) {
@@ -461,12 +332,10 @@ class UIController {
         document.querySelectorAll('#sidebarMenu a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
     }
 
-    updateFab(page) {
-        document.getElementById('fabButton').style.display = ['ingredientes','receitas','compras','vendas'].includes(page) ? 'flex' : 'none';
-    }
+    updateFab(page) { document.getElementById('fabButton').style.display = ['ingredientes','receitas','compras','vendas'].includes(page) ? 'flex' : 'none'; }
 
     handleFab() {
-        switch (this.currentPage) {
+        switch(this.currentPage) {
             case 'ingredientes': this.showIngredienteForm(); break;
             case 'receitas': this.showReceitaForm(); break;
             case 'compras': this.showCompraForm(); break;
@@ -477,7 +346,7 @@ class UIController {
     renderPage(page) {
         this.currentPage = page;
         const m = document.getElementById('mainContent');
-        switch (page) {
+        switch(page) {
             case 'dashboard': this.renderDashboard(); break;
             case 'vendas': this.renderModoFesta(); break;
             case 'estoque': this.renderEstoque(); break;
@@ -494,7 +363,6 @@ class UIController {
         this.renderSidebar();
     }
 
-    // ---------- SIDEBAR ----------
     renderSidebar() {
         const items = [
             { page:'dashboard', icon:'📊', label:'Dashboard' },{ page:'vendas', icon:'🎉', label:'Modo Festa' },
@@ -504,9 +372,7 @@ class UIController {
             { page:'relatorios', icon:'📈', label:'Relatórios' },{ page:'configuracoes', icon:'⚙️', label:'Configurações' },
             { page:'backup', icon:'💾', label:'Backup' }
         ];
-        document.getElementById('sidebarMenu').innerHTML = items.map(i =>
-            `<li><a data-page="${i.page}" class="${this.currentPage===i.page?'active':''}"><span class="menu-icon">${i.icon}</span> ${i.label}</a></li>`
-        ).join('');
+        document.getElementById('sidebarMenu').innerHTML = items.map(i => `<li><a data-page="${i.page}" class="${this.currentPage===i.page?'active':''}"><span class="menu-icon">${i.icon}</span> ${i.label}</a></li>`).join('');
         document.querySelectorAll('#sidebarMenu a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); this.navigateTo(a.dataset.page); }));
     }
 
@@ -517,7 +383,6 @@ class UIController {
         else s.classList.toggle('open');
     }
 
-    // ---------- TEMA ----------
     toggleTheme() {
         const cur = document.documentElement.getAttribute('data-theme') || 'light';
         const next = cur === 'dark' ? 'light' : 'dark';
@@ -551,22 +416,25 @@ class UIController {
         const close = document.querySelector('#modalContent .modal-close');
         if (close) close.addEventListener('click', () => this.closeModal());
     }
-    closeModal(res) { document.getElementById('modalOverlay').style.display = 'none'; if (this._modalCb) { this._modalCb(res); this._modalCb = null; } }
+
+    closeModal(res) {
+        document.getElementById('modalOverlay').style.display = 'none';
+        if (this._modalCb) { this._modalCb(res); this._modalCb = null; }
+    }
 
     formatarMoeda(v) { return new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v||0); }
 
     // ===================== DASHBOARD =====================
     renderDashboard() {
-        const d = state.getData();
         const main = document.getElementById('mainContent');
         main.innerHTML = `
             <div class="dashboard-grid">
                 <div class="dashboard-card" onclick="ui.navigateTo('vendas')"><div class="dc-icon">💰</div><div class="dc-value">${this.formatarMoeda(state.getFaturamentoHoje())}</div><div class="dc-label">Faturamento Hoje</div></div>
                 <div class="dashboard-card"><div class="dc-icon">📈</div><div class="dc-value">${this.formatarMoeda(state.getLucroHoje())}</div><div class="dc-label">Lucro Hoje</div></div>
                 <div class="dashboard-card"><div class="dc-icon">🛒</div><div class="dc-value">${state.getQuantidadeVendidaHoje()}</div><div class="dc-label">Vendas Hoje</div></div>
-                <div class="dashboard-card" onclick="ui.navigateTo('caixa')"><div class="dc-icon">🏦</div><div class="dc-value">${this.formatarMoeda(d.caixa.saldoAtual||0)}</div><div class="dc-label">Saldo Caixa</div></div>
-                <div class="dashboard-card" onclick="ui.navigateTo('receitas')"><div class="dc-icon">📋</div><div class="dc-value">${d.receitas.length}</div><div class="dc-label">Receitas</div></div>
-                <div class="dashboard-card" onclick="ui.navigateTo('ingredientes')"><div class="dc-icon">🥩</div><div class="dc-value">${d.ingredientes.length}</div><div class="dc-label">Ingredientes</div></div>
+                <div class="dashboard-card" onclick="ui.navigateTo('caixa')"><div class="dc-icon">🏦</div><div class="dc-value">${this.formatarMoeda(state.getData().caixa.saldoAtual||0)}</div><div class="dc-label">Saldo Caixa</div></div>
+                <div class="dashboard-card" onclick="ui.navigateTo('receitas')"><div class="dc-icon">📋</div><div class="dc-value">${state.getData().receitas.length}</div><div class="dc-label">Receitas</div></div>
+                <div class="dashboard-card" onclick="ui.navigateTo('ingredientes')"><div class="dc-icon">🥩</div><div class="dc-value">${state.getData().ingredientes.length}</div><div class="dc-label">Ingredientes</div></div>
                 <div class="dashboard-card full-width"><div class="dc-icon">💵</div><div class="dc-value">${this.formatarMoeda(state.getValorTotalVendasPossiveis())}</div><div class="dc-label">Receita Potencial (estoque atual)</div></div>
             </div>
             <div class="card mt-16"><div class="card-header"><span class="card-title">📊 Vendas Recentes</span></div>${this.renderGraficoVendas()}</div>
@@ -743,9 +611,7 @@ class UIController {
             if (s?.value) data.ingredientes.push({ ingredienteId:s.value, quantidade:parseFloat(q?.value)||0, unidadeUsada:u?.value||'un' });
         });
         id ? state.updateReceita(id, data) : state.addReceita(data);
-        this.closeModal();
-        this.showToast('Receita salva! ✅','success');
-        this.renderReceitas();
+        this.closeModal(); this.showToast('Receita salva! ✅','success'); this.renderReceitas();
     }
 
     deleteReceita(id) { if(confirm('Excluir receita?')){ state.deleteReceita(id); this.renderReceitas(); } }
@@ -961,7 +827,6 @@ class UIController {
     }
 }
 
-// Inicialização
 let ui;
 document.addEventListener('DOMContentLoaded', () => {
     ui = new UIController();
