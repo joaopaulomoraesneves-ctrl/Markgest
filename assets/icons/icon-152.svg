@@ -1,0 +1,12 @@
+<!-- icon-152.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 152" width="152" height="152">
+  <defs>
+    <linearGradient id="bg152" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8B0000"/>
+      <stop offset="100%" stop-color="#1A1A1A"/>
+    </linearGradient>
+  </defs>
+  <rect width="152" height="152" rx="25" fill="url(#bg152)"/>
+  <text x="76" y="87" text-anchor="middle" font-size="63">🍔</text>
+  <text x="76" y="126" text-anchor="middle" font-size="14" font-family="Arial,sans-serif" font-weight="bold" fill="#D4AF37" letter-spacing="1">FESTAGEST</text>
+</svg>
