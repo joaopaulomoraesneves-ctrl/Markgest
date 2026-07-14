@@ -45,7 +45,6 @@ class StateManager {
             const saved = localStorage.getItem('festagest_data');
             if (saved) {
                 const parsed = JSON.parse(saved);
-                // Garantir que config tenha todos os campos
                 parsed.config = { ...DEFAULT_CONFIG, ...parsed.config };
                 return parsed;
             }
@@ -78,7 +77,6 @@ class StateManager {
     addIngrediente(ingrediente) {
         ingrediente.id = Date.now().toString();
         ingrediente.createdAt = new Date().toISOString();
-        // Calcular preços unitários
         this._calcularPrecosUnitarios(ingrediente);
         this.data.ingredientes.push(ingrediente);
         this.saveData();
@@ -188,12 +186,23 @@ class StateManager {
             });
         }
         receita.custoTotal = custoTotal;
-        const markup = parseFloat(receita.markup) || parseFloat(this.data.config.markupPadrao) || 2.5;
-        receita.precoSugerido = custoTotal * markup;
-        receita.precoArredondado = this._arredondarPreco(receita.precoSugerido);
-        receita.margem = receita.precoArredondado - custoTotal;
-        receita.lucro = receita.margem;
-        receita.margemPercentual = receita.precoArredondado > 0 ? (receita.margem / receita.precoArredondado) * 100 : 0;
+
+        // Preço manual tem prioridade
+        const precoManual = parseFloat(receita.precoManual);
+        if (precoManual > 0) {
+            receita.precoArredondado = precoManual;
+            receita.precoSugerido = precoManual;
+            receita.margem = precoManual - custoTotal;
+            receita.lucro = receita.margem;
+            receita.margemPercentual = precoManual > 0 ? (receita.margem / precoManual) * 100 : 0;
+        } else {
+            const markup = parseFloat(receita.markup) || parseFloat(this.data.config.markupPadrao) || 2.5;
+            receita.precoSugerido = custoTotal * markup;
+            receita.precoArredondado = this._arredondarPreco(receita.precoSugerido);
+            receita.margem = receita.precoArredondado - custoTotal;
+            receita.lucro = receita.margem;
+            receita.margemPercentual = receita.precoArredondado > 0 ? (receita.margem / receita.precoArredondado) * 100 : 0;
+        }
     }
 
     _arredondarPreco(preco) {
@@ -271,7 +280,6 @@ class StateManager {
         if (ing) {
             const novaQtd = (parseFloat(ing.quantidadeComprada) || 0) + (parseFloat(compra.quantidade) || 0);
             const novoPreco = (parseFloat(compra.valor) || 0);
-            // Média ponderada simples
             ing.precoPago = ((parseFloat(ing.precoPago) || 0) * (parseFloat(ing.quantidadeComprada) || 1) + novoPreco) / (novaQtd || 1);
             ing.quantidadeComprada = novaQtd;
             this._calcularPrecosUnitarios(ing);
@@ -348,13 +356,16 @@ class StateManager {
     }
 
     getEstoqueAtual(ingredienteId) {
+        const ing = this.data.ingredientes.find(i => i.id === ingredienteId);
         const entradas = this.data.estoqueMovimentacoes
             .filter(m => m.ingredienteId === ingredienteId && m.tipo === 'entrada')
             .reduce((sum, m) => sum + (parseFloat(m.quantidade) || 0), 0);
         const saidas = this.data.estoqueMovimentacoes
             .filter(m => m.ingredienteId === ingredienteId && m.tipo === 'saida')
             .reduce((sum, m) => sum + (parseFloat(m.quantidade) || 0), 0);
-        return entradas - saidas;
+        // Inclui quantidade comprada inicial como estoque
+        const estoqueInicial = ing ? (parseFloat(ing.quantidadeComprada) || 0) : 0;
+        return estoqueInicial + entradas - saidas;
     }
 
     // Backup
@@ -426,7 +437,6 @@ class StateManager {
     }
 
     showToast(message, type = 'info') {
-        // Será sobrescrito pela UI
         if (window._showToast) window._showToast(message, type);
     }
 }
@@ -443,7 +453,6 @@ class UIController {
     }
 
     init() {
-        // Esconder splash screen após carregamento
         setTimeout(() => {
             document.getElementById('splashScreen').classList.add('hidden');
             document.getElementById('appContainer').style.display = 'flex';
@@ -452,17 +461,14 @@ class UIController {
             this.applyTheme();
         }, 1200);
 
-        // Registrar listener para atualizações
         state.addListener(() => {
             if (this.currentPage === 'dashboard') this.renderDashboard();
         });
 
-        // Toast global
         window._showToast = (message, type) => this.showToast(message, type);
     }
 
     setupEventListeners() {
-        // Navegação inferior
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.addEventListener('click', () => {
                 const page = btn.dataset.page;
@@ -474,17 +480,13 @@ class UIController {
             });
         });
 
-        // Sidebar
         document.getElementById('sidebarOverlay').addEventListener('click', () => this.toggleSidebar(false));
         document.getElementById('menuToggle').addEventListener('click', () => this.toggleSidebar());
 
-        // Tema
         document.getElementById('themeToggle').addEventListener('click', () => this.toggleTheme());
 
-        // FAB
         document.getElementById('fabButton').addEventListener('click', () => this.handleFabClick());
 
-        // Fechar modal
         document.getElementById('modalOverlay').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) this.closeModal();
         });
@@ -523,7 +525,6 @@ class UIController {
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.page === page);
         });
-        // Atualizar sidebar também
         document.querySelectorAll('#sidebarMenu a').forEach(a => {
             a.classList.toggle('active', a.dataset.page === page);
         });
@@ -551,7 +552,6 @@ class UIController {
                 this.showCompraForm();
                 break;
             case 'vendas':
-                // No modo festa, FAB pode abrir vendas rápidas ou lista
                 this.showVendaRapidaModal();
                 break;
         }
@@ -599,7 +599,6 @@ class UIController {
             </a></li>
         `).join('');
 
-        // Event listeners sidebar
         menu.querySelectorAll('a').forEach(a => {
             a.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -660,7 +659,6 @@ class UIController {
         document.getElementById('modalOverlay').style.display = 'flex';
         this.currentModalCallback = callback;
 
-        // Adicionar evento de fechar no botão close
         const closeBtn = document.getElementById('modalContent').querySelector('.modal-close');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => this.closeModal());
@@ -885,12 +883,10 @@ class UIController {
         this.closeModal();
         this.showToast(`✅ Vendido: ${receita.nome} - ${this.formatarMoeda(receita.precoArredondado)} (${formaPagamento})`, 'success');
         this.renderModoFesta();
-        // Vibrar se disponível
         if (navigator.vibrate) navigator.vibrate(50);
     }
 
     showVendaRapidaModal() {
-        // Venda rápida personalizada
         this.openModal(`
             <div class="modal-header">
                 <h2 class="modal-title">Venda Rápida</h2>
@@ -968,7 +964,6 @@ class UIController {
             }).join('');
         }
 
-        // Receitas - quanto pode ser produzido
         html += '<h3 class="mt-16 mb-8">📋 Capacidade de Produção</h3>';
         data.receitas.forEach(r => {
             const prod = state.getProducaoPossivel(r.id);
@@ -1052,6 +1047,12 @@ class UIController {
                 <div class="form-group">
                     <label class="form-label">Markup (multiplicador)</label>
                     <input type="number" class="form-input" id="receitaMarkup" value="${receita?.markup || state.getData().config.markupPadrao || 2.5}" step="0.1" min="1">
+                    <small style="color:var(--text-secondary)">Usado apenas se não preencher o Preço Manual abaixo.</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Preço de Venda Manual (opcional)</label>
+                    <input type="number" class="form-input" id="receitaPrecoManual" value="${receita?.precoManual || ''}" step="0.01" min="0" placeholder="Ex: 15.00">
+                    <small style="color:var(--text-secondary)">Se preenchido, ignora o markup e usa este valor como preço final.</small>
                 </div>
                 <h4 class="mb-8">Ingredientes</h4>
                 <div id="ingredientesReceitaContainer">
@@ -1097,6 +1098,7 @@ class UIController {
         const nome = document.getElementById('receitaNome')?.value;
         const emoji = document.getElementById('receitaEmoji')?.value || '🍔';
         const markup = parseFloat(document.getElementById('receitaMarkup')?.value) || 2.5;
+        const precoManual = parseFloat(document.getElementById('receitaPrecoManual')?.value) || 0;
 
         if (!nome) {
             this.showToast('Nome da receita é obrigatório!', 'error');
@@ -1118,7 +1120,7 @@ class UIController {
             }
         });
 
-        const receitaData = { nome, emoji, markup, ingredientes };
+        const receitaData = { nome, emoji, markup, precoManual, ingredientes };
 
         if (id) {
             state.updateReceita(id, receitaData);
@@ -1633,7 +1635,6 @@ class UIController {
             </div>
         `;
 
-        // Preços arredondados alternativos
         const alternativas = [24.90, 29.90, 34.90, 39.90, 49.90, 59.90, 69.90, 79.90, 89.90, 99.90];
         document.getElementById('mkArredondados').innerHTML = alternativas.map(p => {
             const l = p - custo;
@@ -1667,7 +1668,6 @@ let ui;
 document.addEventListener('DOMContentLoaded', () => {
     ui = new UIController();
 
-    // Registrar Service Worker
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/service-worker.js')
@@ -1680,7 +1680,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Expor ui globalmente para onclick handlers
     window.ui = ui;
     window.state = state;
 });
