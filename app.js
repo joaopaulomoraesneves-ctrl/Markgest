@@ -1,8 +1,6 @@
 /* ============================================================
-   FESTAGEST PRO - Aplicação Principal (v1.2)
-   Correção definitiva na conversão de unidades e produção.
+   FESTAGEST PRO - v1.3 (Correção total dos cálculos)
    ============================================================ */
-
 const DEFAULT_CONFIG = {
     empresa: 'Minha Barraca', logo: '🍔', tema: 'light', moeda: 'BRL',
     idioma: 'pt-BR', markupPadrao: 2.5, impostos: 0, arredondamento: '0.90'
@@ -27,7 +25,7 @@ class StateManager {
                 parsed.config = { ...DEFAULT_CONFIG, ...parsed.config };
                 return parsed;
             }
-        } catch (e) {}
+        } catch (e) { console.error(e); }
         return JSON.parse(JSON.stringify(INITIAL_DATA));
     }
     saveData() {
@@ -195,13 +193,11 @@ class StateManager {
         const paraGramas = { 'kg':1000, 'kilo':1000, 'quilo':1000, 'g':1, 'grama':1, 'gramas':1 };
         const paraMl = { 'l':1000, 'litro':1000, 'ml':1, 'mililitro':1 };
         const deL = (de||'').toLowerCase(), paraL = (para||'').toLowerCase();
-        if (paraGramas.hasOwnProperty(deL) && paraGramas.hasOwnProperty(paraL)) {
-            const emGramas = quantidade * paraGramas[deL];
-            return emGramas / paraGramas[paraL];
+        if (paraGramas[deL] !== undefined && paraGramas[paraL] !== undefined) {
+            return (quantidade * paraGramas[deL]) / paraGramas[paraL];
         }
-        if (paraMl.hasOwnProperty(deL) && paraMl.hasOwnProperty(paraL)) {
-            const emMl = quantidade * paraMl[deL];
-            return emMl / paraMl[paraL];
+        if (paraMl[deL] !== undefined && paraMl[paraL] !== undefined) {
+            return (quantidade * paraMl[deL]) / paraMl[paraL];
         }
         return quantidade;
     }
@@ -211,22 +207,30 @@ class StateManager {
         if (!ing) return 0;
         const unIng = ing.unidade || 'un';
         let total = parseFloat(ing.quantidadeComprada) || 0;
-        this.data.estoqueMovimentacoes.filter(m => m.ingredienteId === ingredienteId && m.tipo === 'entrada').forEach(m => {
-            total += this._converterUnidade(parseFloat(m.quantidade)||0, m.unidade||unIng, unIng);
-        });
-        this.data.estoqueMovimentacoes.filter(m => m.ingredienteId === ingredienteId && m.tipo === 'saida').forEach(m => {
-            total -= this._converterUnidade(parseFloat(m.quantidade)||0, m.unidade||unIng, unIng);
-        });
+        this.data.estoqueMovimentacoes
+            .filter(m => m.ingredienteId === ingredienteId && m.tipo === 'entrada')
+            .forEach(m => total += this._converterUnidade(parseFloat(m.quantidade)||0, m.unidade||unIng, unIng));
+        this.data.estoqueMovimentacoes
+            .filter(m => m.ingredienteId === ingredienteId && m.tipo === 'saida')
+            .forEach(m => total -= this._converterUnidade(parseFloat(m.quantidade)||0, m.unidade||unIng, unIng));
+        console.log(`Estoque de ${ing.nome}: ${total} ${unIng}`);
         return Math.max(0, total);
     }
 
     getProducaoPossivel(receitaId) {
         const rec = this.data.receitas.find(r => r.id === receitaId);
-        if (!rec?.ingredientes?.length) return Infinity;
+        if (!rec) return 0;
+        if (!rec.ingredientes || rec.ingredientes.length === 0) {
+            console.warn(`Receita ${rec.nome} sem ingredientes.`);
+            return Infinity; // manter para indicar "sem ingredientes"
+        }
         let min = Infinity;
         rec.ingredientes.forEach(ingR => {
             const ing = this.data.ingredientes.find(i => i.id === ingR.ingredienteId);
-            if (!ing) return;
+            if (!ing) {
+                console.warn(`Ingrediente não encontrado para ${ingR.nome || 'desconhecido'} na receita ${rec.nome}`);
+                return;
+            }
             const estoque = this.getEstoqueAtual(ing.id);
             const qtdNecessaria = this._converterUnidade(parseFloat(ingR.quantidade)||0, ingR.unidadeUsada||'un', ing.unidade||'un');
             if (qtdNecessaria > 0) {
@@ -234,15 +238,20 @@ class StateManager {
                 if (possivel < min) min = possivel;
             }
         });
-        return min === Infinity ? 0 : min;
+        const resultado = min === Infinity ? Infinity : min;
+        console.log(`Produção possível de ${rec.nome}: ${resultado}`);
+        return resultado;
     }
 
     getValorTotalVendasPossiveis() {
         let total = 0;
         this.data.receitas.forEach(r => {
             const qtd = this.getProducaoPossivel(r.id);
-            if (qtd > 0 && qtd !== Infinity) total += qtd * (parseFloat(r.precoArredondado)||0);
+            if (qtd > 0 && qtd !== Infinity) {
+                total += qtd * (parseFloat(r.precoArredondado)||0);
+            }
         });
+        console.log('Valor total de vendas possível:', total);
         return total;
     }
 
@@ -530,17 +539,27 @@ class UIController {
         const search = document.getElementById('estoqueSearch')?.value?.toLowerCase() || '';
         let html = '<div class="search-bar"><input type="text" class="form-input" id="estoqueSearch" placeholder="🔍 Buscar ingrediente..." oninput="ui.renderEstoque()"></div>';
         const filtrados = ings.filter(i=>i.nome.toLowerCase().includes(search));
-        if (!filtrados.length) html += '<div class="empty-state"><div class="empty-icon">📦</div><h3>Nenhum ingrediente</h3></div>';
-        else filtrados.forEach(ing => {
-            const est = state.getEstoqueAtual(ing.id);
-            const cls = est<=0?'badge-danger':est<10?'badge-warning':'badge-success';
-            html += `<div class="card"><div class="flex-between"><div><strong>${ing.nome}</strong><span class="tag">${ing.categoria||'Geral'}</span></div><span class="badge ${cls}">${est.toFixed(2)} ${ing.unidade||'un'}</span></div><div class="progress-bar mt-8"><div class="progress-fill" style="width:${Math.min((est/(parseFloat(ing.quantidadeComprada)||1))*100,100)}%"></div></div><p class="font-sm mt-8">Preço/un: ${this.formatarMoeda(ing.precoPorUnidade)}</p></div>`;
-        });
+        if (!filtrados.length) {
+            html += '<div class="empty-state"><div class="empty-icon">📦</div><h3>Nenhum ingrediente</h3></div>';
+        } else {
+            filtrados.forEach(ing => {
+                const est = state.getEstoqueAtual(ing.id);
+                const cls = est<=0?'badge-danger':est<10?'badge-warning':'badge-success';
+                html += `<div class="card"><div class="flex-between"><div><strong>${ing.nome}</strong><span class="tag">${ing.categoria||'Geral'}</span></div><span class="badge ${cls}">${est.toFixed(2)} ${ing.unidade||'un'}</span></div><div class="progress-bar mt-8"><div class="progress-fill" style="width:${Math.min((est/(parseFloat(ing.quantidadeComprada)||1))*100,100)}%"></div></div><p class="font-sm mt-8">Preço/un: ${this.formatarMoeda(ing.precoPorUnidade)}</p></div>`;
+            });
+        }
         html += '<h3 class="mt-16 mb-8">📋 Capacidade de Produção</h3>';
-        state.getData().receitas.forEach(r => {
-            const p = state.getProducaoPossivel(r.id);
-            html += `<div class="card"><div class="flex-between"><span>${r.emoji||'🍔'} <strong>${r.nome}</strong></span><span class="badge ${p<5?'badge-danger':p<20?'badge-warning':'badge-success'}">${p===Infinity?'∞':p} un</span></div></div>`;
-        });
+        const receitas = state.getData().receitas;
+        if (receitas.length) {
+            receitas.forEach(r => {
+                const p = state.getProducaoPossivel(r.id);
+                const badgeClass = p===Infinity?'badge-info':p<5?'badge-danger':p<20?'badge-warning':'badge-success';
+                const texto = p===Infinity?'Sem ingredientes':`${p} un`;
+                html += `<div class="card"><div class="flex-between"><span>${r.emoji||'🍔'} <strong>${r.nome}</strong></span><span class="badge ${badgeClass}">${texto}</span></div></div>`;
+            });
+        } else {
+            html += '<p class="text-center font-sm">Nenhuma receita cadastrada.</p>';
+        }
         const totalValor = state.getValorTotalVendasPossiveis();
         html += `<div class="card mt-8"><div class="flex-between"><span class="card-title">💵 Valor total possível de vendas</span><span class="card-value">${this.formatarMoeda(totalValor)}</span></div></div>`;
         main.innerHTML = html;
@@ -552,7 +571,7 @@ class UIController {
         const recs = state.getData().receitas;
         const main = document.getElementById('mainContent');
         if (!recs.length) main.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h3>Nenhuma receita</h3><p>Toque no + para criar.</p></div>';
-        else main.innerHTML = recs.map(r=>`<div class="card"><div class="flex-between"><h3>${r.emoji||'🍔'} ${r.nome}</h3><div><button class="btn btn-sm btn-outline" onclick="ui.showReceitaForm('${r.id}')">✏️</button><button class="btn btn-sm btn-danger" onclick="ui.deleteReceita('${r.id}')">🗑️</button></div></div><div class="card-row mt-8"><div class="card-mini"><div class="mini-value">${this.formatarMoeda(r.custoTotal)}</div><div class="mini-label">Custo</div></div><div class="card-mini"><div class="mini-value">${this.formatarMoeda(r.precoArredondado)}</div><div class="mini-label">Preço</div></div><div class="card-mini"><div class="mini-value">${this.formatarMoeda(r.margem)}</div><div class="mini-label">Margem</div></div><div class="card-mini"><div class="mini-value">${(r.margemPercentual||0).toFixed(1)}%</div><div class="mini-label">% Margem</div></div></div><p class="font-sm mt-8">Produção possível: <strong>${state.getProducaoPossivel(r.id)}</strong> un</p></div>`).join('');
+        else main.innerHTML = recs.map(r=>`<div class="card"><div class="flex-between"><h3>${r.emoji||'🍔'} ${r.nome}</h3><div><button class="btn btn-sm btn-outline" onclick="ui.showReceitaForm('${r.id}')">✏️</button><button class="btn btn-sm btn-danger" onclick="ui.deleteReceita('${r.id}')">🗑️</button></div></div><div class="card-row mt-8"><div class="card-mini"><div class="mini-value">${this.formatarMoeda(r.custoTotal)}</div><div class="mini-label">Custo</div></div><div class="card-mini"><div class="mini-value">${this.formatarMoeda(r.precoArredondado)}</div><div class="mini-label">Preço</div></div><div class="card-mini"><div class="mini-value">${this.formatarMoeda(r.margem)}</div><div class="mini-label">Margem</div></div><div class="card-mini"><div class="mini-value">${(r.margemPercentual||0).toFixed(1)}%</div><div class="mini-label">% Margem</div></div></div><p class="font-sm mt-8">Produção possível: <strong>${state.getProducaoPossivel(r.id)===Infinity?'Sem ingredientes':state.getProducaoPossivel(r.id)+' un'}</strong></p></div>`).join('');
         document.getElementById('headerTitle').textContent = 'Receitas';
         document.getElementById('fabButton').style.display = 'flex';
     }
@@ -610,6 +629,7 @@ class UIController {
             const u = row.querySelectorAll('select')[1];
             if (s?.value) data.ingredientes.push({ ingredienteId:s.value, quantidade:parseFloat(q?.value)||0, unidadeUsada:u?.value||'un' });
         });
+        console.log('Salvando receita:', data);
         id ? state.updateReceita(id, data) : state.addReceita(data);
         this.closeModal(); this.showToast('Receita salva! ✅','success'); this.renderReceitas();
     }
